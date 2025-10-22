@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "pcos-care": {
+      "command": "python3",
+      "args": [
+        "/home/claude/pcos-care-mcp/server.py"
+      ],
+      "env": {}
+    }
+  }
+}
