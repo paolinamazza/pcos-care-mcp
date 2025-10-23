@@ -39,3 +39,6 @@ config_local.json
 
 # MCP Inspector
 .mcp-inspector/
+.coverage
+*.pyc
+__pycache__/
