@@ -23,6 +23,15 @@ except ImportError:
 
 from rag.pcos_documents import get_all_documents
 
+# Import new PDF-based RAG system
+try:
+    from rag.vector_store import VectorStore
+    from rag.embeddings import EmbeddingsGenerator
+    PDF_RAG_AVAILABLE = True
+except ImportError:
+    PDF_RAG_AVAILABLE = False
+    logging.warning("PDF RAG system not available (missing dependencies)")
+
 logger = logging.getLogger("pcos-care-mcp.rag")
 
 
@@ -36,34 +45,74 @@ class PCOSKnowledgeBase:
     - Knowledge base con documenti evidence-based
     """
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", use_pdf_rag: bool = True):
         """
         Inizializza knowledge base.
 
         Args:
             model_name: Nome del modello sentence-transformers
                        (default: all-MiniLM-L6-v2, piccolo e veloce)
+            use_pdf_rag: Se True, usa il nuovo sistema basato su PDF reali (default: True)
         """
-        if not DEPENDENCIES_AVAILABLE:
-            raise ImportError(
-                "RAG dependencies not installed. "
-                "Run: pip install sentence-transformers faiss-cpu numpy"
-            )
-
         self.model_name = model_name
         self.model = None
         self.index = None
         self.documents = []
         self.embeddings = None
+        self.use_pdf_rag = use_pdf_rag and PDF_RAG_AVAILABLE
 
-        # Paths per cache
+        # Check if we have at least one working system
+        if not DEPENDENCIES_AVAILABLE and not PDF_RAG_AVAILABLE:
+            raise ImportError(
+                "No RAG system available. Install dependencies:\n"
+                "  For PDF RAG: pip install sentence-transformers chromadb pypdf\n"
+                "  For legacy FAISS: pip install sentence-transformers faiss-cpu numpy"
+            )
+
+        # Warn if legacy system requested but not available
+        if not use_pdf_rag and not DEPENDENCIES_AVAILABLE:
+            logger.warning(
+                "Legacy FAISS system requested but dependencies not available. "
+                "Install: pip install sentence-transformers faiss-cpu numpy"
+            )
+
+        # Paths per cache (legacy FAISS system)
         self.cache_dir = Path(__file__).parent.parent / "data" / "rag_cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.index_path = self.cache_dir / "faiss.index"
         self.embeddings_path = self.cache_dir / "embeddings.pkl"
         self.docs_path = self.cache_dir / "documents.pkl"
 
-        logger.info(f"Initializing PCOS Knowledge Base with model: {model_name}")
+        # Initialize PDF-based RAG system if available
+        self.vector_store = None
+        self.embeddings_generator = None
+
+        if self.use_pdf_rag:
+            try:
+                logger.info("Initializing PDF-based RAG system...")
+                self.vector_store = VectorStore()
+                self.embeddings_generator = EmbeddingsGenerator(model_name=model_name)
+
+                # Check if ChromaDB has data
+                stats = self.vector_store.get_statistics()
+                if stats['total_chunks'] == 0:
+                    logger.warning(
+                        "ChromaDB is empty. Run 'python3 scripts/setup_rag.py' to build the knowledge base."
+                    )
+                else:
+                    logger.info(
+                        f"PDF RAG system ready: {stats['total_chunks']} chunks from "
+                        f"{len(stats['categories'])} categories"
+                    )
+            except Exception as e:
+                logger.error(f"Failed to initialize PDF RAG system: {e}")
+                self.use_pdf_rag = False
+                logger.info("Falling back to legacy FAISS system")
+
+        logger.info(
+            f"Initializing PCOS Knowledge Base with model: {model_name} "
+            f"(PDF RAG: {'enabled' if self.use_pdf_rag else 'disabled'})"
+        )
 
     def _load_model(self):
         """Carica il modello sentence-transformers (lazy loading)"""
@@ -283,6 +332,119 @@ class PCOSKnowledgeBase:
             "confidence": results[0]["score"] if results else 0
         }
 
+    def query_pdf_knowledge(
+        self,
+        query: str,
+        top_k: int = 5,
+        category_filter: Optional[str] = None,
+        include_sources: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Query the PDF-based RAG system (new system with real PDFs).
+
+        Args:
+            query: User question
+            top_k: Number of chunks to retrieve
+            category_filter: Optional category filter (e.g., 'guidelines', 'nutrition')
+            include_sources: Whether to include source citations
+
+        Returns:
+            Dictionary with answer and metadata
+        """
+        if not self.use_pdf_rag or self.vector_store is None:
+            return {
+                "success": False,
+                "message": (
+                    "PDF RAG system not available. "
+                    "Either ChromaDB is empty or dependencies are missing. "
+                    "Run 'python3 scripts/setup_rag.py' to build the knowledge base."
+                ),
+                "query": query,
+                "fallback_available": True
+            }
+
+        try:
+            # Query vector store
+            results = self.vector_store.query_by_text(
+                query_text=query,
+                top_k=top_k,
+                category_filter=category_filter
+            )
+
+            if not results['chunks']:
+                return {
+                    "success": False,
+                    "message": "No relevant information found in the knowledge base.",
+                    "query": query,
+                    "fallback_available": True
+                }
+
+            # Build context from chunks
+            context_parts = []
+            sources = []
+            seen_sources = set()
+
+            for chunk_data in results['chunks']:
+                text = chunk_data['text']
+                metadata = chunk_data['metadata']
+                distance = chunk_data.get('distance', 1.0)
+
+                # Add to context (only high-quality chunks)
+                # ChromaDB uses L2 distance - lower is better
+                if distance < 1.5:  # Threshold for quality
+                    context_parts.append(text.strip())
+
+                # Add to sources (avoid duplicates)
+                source_key = f"{metadata['source']}_{metadata['category']}"
+                if include_sources and source_key not in seen_sources:
+                    seen_sources.add(source_key)
+
+                    # Convert distance to similarity score (0-1, higher is better)
+                    similarity = max(0, 1 - (distance / 2))  # Normalize distance
+
+                    sources.append({
+                        "title": metadata['source'],
+                        "category": metadata['category'],
+                        "page": metadata.get('page', 'N/A'),
+                        "relevance_score": round(similarity, 2),
+                        "chunk_preview": text[:150] + "..." if len(text) > 150 else text
+                    })
+
+            # Combine context
+            if not context_parts:
+                # Fallback to best match even if low quality
+                context_parts = [results['chunks'][0]['text']]
+
+            context = "\n\n".join(context_parts[:3])  # Limit to top 3 for conciseness
+
+            # Calculate overall confidence
+            if results['chunks']:
+                best_distance = results['chunks'][0].get('distance', 1.0)
+                confidence = max(0, 1 - (best_distance / 2))
+            else:
+                confidence = 0
+
+            return {
+                "success": True,
+                "query": query,
+                "context": context,
+                "sources": sources[:5],  # Limit sources
+                "num_sources": len(sources),
+                "confidence": round(confidence, 2),
+                "category_filter": category_filter,
+                "total_chunks_found": results['total'],
+                "system": "pdf_rag"
+            }
+
+        except Exception as e:
+            logger.error(f"Error querying PDF knowledge base: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Error querying knowledge base: {str(e)}",
+                "query": query,
+                "fallback_available": True
+            }
+
     def get_stats(self) -> Dict[str, Any]:
         """
         Restituisce statistiche sulla knowledge base.
@@ -290,22 +452,42 @@ class PCOSKnowledgeBase:
         Returns:
             Dizionario con statistiche
         """
+        stats = {
+            "model": self.model_name,
+            "pdf_rag_enabled": self.use_pdf_rag
+        }
+
+        # PDF RAG stats
+        if self.use_pdf_rag and self.vector_store is not None:
+            try:
+                pdf_stats = self.vector_store.get_statistics()
+                stats["pdf_rag"] = {
+                    "status": "ready" if pdf_stats['total_chunks'] > 0 else "empty",
+                    "total_chunks": pdf_stats['total_chunks'],
+                    "categories": pdf_stats['categories'],
+                    "persist_directory": pdf_stats['persist_directory']
+                }
+            except Exception as e:
+                stats["pdf_rag"] = {"status": "error", "message": str(e)}
+
+        # Legacy FAISS stats
         if self.index is None:
-            return {
+            stats["legacy_faiss"] = {
                 "status": "not_initialized",
                 "message": "Knowledge base not built yet"
             }
+        else:
+            categories = {}
+            for doc in self.documents:
+                cat = doc["category"]
+                categories[cat] = categories.get(cat, 0) + 1
 
-        categories = {}
-        for doc in self.documents:
-            cat = doc["category"]
-            categories[cat] = categories.get(cat, 0) + 1
+            stats["legacy_faiss"] = {
+                "status": "ready",
+                "total_documents": len(self.documents),
+                "categories": categories,
+                "embedding_dimension": self.embeddings.shape[1] if self.embeddings is not None else None,
+                "cache_available": self.index_path.exists()
+            }
 
-        return {
-            "status": "ready",
-            "total_documents": len(self.documents),
-            "categories": categories,
-            "embedding_dimension": self.embeddings.shape[1] if self.embeddings is not None else None,
-            "model": self.model_name,
-            "cache_available": self.index_path.exists()
-        }
+        return stats

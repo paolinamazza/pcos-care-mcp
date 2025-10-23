@@ -657,7 +657,7 @@ Riprova o controlla i parametri.
 ❌ **RAG System Non Disponibile**
 
 Il sistema RAG per Q&A mediche richiede dipendenze aggiuntive.
-Installa con: `pip install sentence-transformers faiss-cpu numpy`
+Installa con: `pip install sentence-transformers chromadb pypdf`
 
 Poi riavvia il server.
 """
@@ -667,32 +667,61 @@ Poi riavvia il server.
             num_sources = arguments.get("num_sources", 3)
 
             try:
-                # Get answer from RAG system
-                result = knowledge_base.get_answer(
+                # Try PDF-based RAG first (new system with real PDFs)
+                result = knowledge_base.query_pdf_knowledge(
                     query=question,
                     top_k=num_sources,
                     include_sources=True
                 )
 
+                # Fallback to legacy FAISS system if PDF RAG fails
+                if not result["success"] and result.get("fallback_available"):
+                    logger.info("PDF RAG failed, falling back to legacy system")
+                    result = knowledge_base.get_answer(
+                        query=question,
+                        top_k=num_sources,
+                        include_sources=True
+                    )
+                    result["system"] = "legacy_faiss"
+
                 if result["success"]:
+                    # Check which system was used
+                    system_name = "PDF RAG (28 research papers)" if result.get("system") == "pdf_rag" else "Legacy Knowledge Base"
+
                     response = f"""
 🧠 **Informazioni PCOS - Evidence-Based**
+📚 Sistema: {system_name}
 
 **Domanda:** {question}
 
 **Risposta:**
-{result['answer']}
+{result.get('context') or result.get('answer', 'N/A')}
 
 **Fonti consultate:**
 """
-                    for i, source in enumerate(result['sources'], 1):
+                    for i, source in enumerate(result.get('sources', []), 1):
                         response += f"\n{i}. **{source['title']}** (Categoria: {source['category']})"
-                        response += f"\n   Fonte: {source['source']}"
-                        response += f"\n   Rilevanza: {source['relevance_score']:.0%}"
 
+                        # Show different metadata based on system
+                        if result.get("system") == "pdf_rag":
+                            response += f"\n   Pagina: ~{source.get('page', 'N/A')}"
+                            response += f"\n   Rilevanza: {source['relevance_score']:.0%}"
+                            if 'chunk_preview' in source:
+                                response += f"\n   Preview: {source['chunk_preview'][:100]}..."
+                        else:
+                            response += f"\n   Fonte: {source.get('source', 'N/A')}"
+                            response += f"\n   Rilevanza: {source.get('relevance_score', 0):.0%}"
+
+                    # Confidence warning
                     confidence = result.get('confidence', 0)
                     if confidence < 0.5:
                         response += "\n\n⚠️ Nota: La risposta potrebbe non essere perfettamente rilevante. Prova a riformulare la domanda."
+
+                    # Category info if using PDF RAG
+                    if result.get("system") == "pdf_rag":
+                        response += f"\n\n📊 Chunk trovati: {result.get('total_chunks_found', 0)}"
+                        if result.get('category_filter'):
+                            response += f" (filtrati per categoria: {result['category_filter']})"
 
                     response += "\n\n💡 Questa è un'informazione generale. Per diagnosi e trattamenti, consulta sempre un medico."
 
@@ -702,10 +731,12 @@ Poi riavvia il server.
 
 Non ho trovato informazioni rilevanti per: "{question}"
 
+{result.get('message', '')}
+
 💡 Prova a:
 - Riformulare la domanda in modo più specifico
 - Chiedere su: sintomi, nutrizione, lifestyle, trattamenti, fertilità
-- Esempi: "Quali sono i sintomi della PCOS?", "Cosa mangiare con la PCOS?", "Come gestire lo stress con PCOS?"
+- Esempi: "Quali sono i criteri Rotterdam?", "Dieta per PCOS?", "Esercizio fisico e PCOS?"
 """
 
                 return [TextContent(type="text", text=response.strip())]
