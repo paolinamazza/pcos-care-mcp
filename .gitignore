@@ -16,6 +16,9 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+# RAG - PDF files (too large for GitHub)
+docs/raw_pdfs/**/*.pdf
+docs/raw_pdfs/**/*.PDF
 
 # Vector stores
 faiss_index/
