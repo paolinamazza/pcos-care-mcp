@@ -64,13 +64,22 @@ cycle_tracker = CycleTracker(db_manager)
 pattern_analyzer = PatternAnalyzer(db_manager)
 
 # Initialize RAG (con try/except per fallback)
-try:
-    knowledge_base = PCOSKnowledgeBase(use_pdf_rag=True)
-    RAG_AVAILABLE = True
-except Exception as e:
+# Disable RAG on Render free tier to save memory
+import os
+ENABLE_RAG = os.getenv("ENABLE_RAG", "false").lower() == "true"
+
+if ENABLE_RAG:
+    try:
+        knowledge_base = PCOSKnowledgeBase(use_pdf_rag=True)
+        RAG_AVAILABLE = True
+    except Exception as e:
+        knowledge_base = None
+        RAG_AVAILABLE = False
+        print(f"Warning: RAG system not available: {e}")
+else:
     knowledge_base = None
     RAG_AVAILABLE = False
-    print(f"Warning: RAG system not available: {e}")
+    print("RAG system disabled (set ENABLE_RAG=true to enable)")
 
 
 # ============================================================================
