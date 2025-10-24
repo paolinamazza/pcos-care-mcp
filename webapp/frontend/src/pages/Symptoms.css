@@ -1,0 +1,125 @@
+.symptoms-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-xl);
+}
+
+.symptom-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.intensity-slider {
+  width: 100%;
+  height: 8px;
+  border-radius: var(--radius-full);
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.intensity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  cursor: pointer;
+}
+
+.intensity-slider.low {
+  background: linear-gradient(to right, var(--success-color), var(--success-color));
+}
+
+.intensity-slider.medium {
+  background: linear-gradient(to right, var(--warning-color), var(--warning-color));
+}
+
+.intensity-slider.high {
+  background: linear-gradient(to right, var(--error-color), var(--error-color));
+}
+
+.intensity-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: var(--spacing-xs);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.symptoms-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.symptom-item {
+  padding: var(--spacing-md);
+  background-color: var(--bg-color);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--primary-color);
+}
+
+.symptom-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+}
+
+.symptom-type {
+  flex: 1;
+}
+
+.symptom-type strong {
+  display: block;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.symptom-date {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.intensity-badge {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.intensity-badge.low {
+  background-color: var(--success-light);
+  color: var(--success-color);
+}
+
+.intensity-badge.medium {
+  background-color: var(--warning-light);
+  color: var(--warning-color);
+}
+
+.intensity-badge.high {
+  background-color: var(--error-light);
+  color: var(--error-color);
+}
+
+.symptom-notes {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+  .symptoms-layout {
+    grid-template-columns: 1fr;
+  }
+}

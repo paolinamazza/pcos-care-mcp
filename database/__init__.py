@@ -8,6 +8,7 @@ from database.models import (
 )
 from database.db_manager import DatabaseManager
 from database.schema import SymptomRecord, CycleRecord
+from database.auth import User
 
 __all__ = [
     # Symptom tracking
@@ -23,5 +24,7 @@ __all__ = [
     # Database
     'DatabaseManager',
     'SymptomRecord',
-    'CycleRecord'
+    'CycleRecord',
+    # Authentication
+    'User'
 ]

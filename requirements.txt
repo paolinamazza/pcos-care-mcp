@@ -35,3 +35,16 @@ pandas>=2.0.0
 # FASE 3: Knowledge Base
 beautifulsoup4>=4.12.0
 requests>=2.31.0
+
+# WebApp: FastAPI Backend
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+
+# WebApp: Authentication
+passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.3.0
+
+# WebApp: AI Chatbot
+anthropic>=0.18.0
+openai>=1.12.0
