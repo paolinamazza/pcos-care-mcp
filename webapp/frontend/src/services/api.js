@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+// Production backend on Render.com
+const API_BASE_URL = 'https://pcos-care-mcp.onrender.com';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
