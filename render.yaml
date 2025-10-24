@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: pcos-care-api
+    env: python
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd webapp/api && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: PYTHONUNBUFFERED
+        value: 1
