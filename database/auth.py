@@ -4,7 +4,7 @@ Authentication models and utilities for PCOS Care
 
 from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from datetime import datetime
-from database.models import Base
+from database.schema import Base
 
 
 class User(Base):

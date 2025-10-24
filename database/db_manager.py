@@ -28,12 +28,21 @@ class DatabaseManager:
     def __init__(self, db_url: Optional[str] = None):
         """
         Inizializza database manager.
-        
+
         Args:
             db_url: Database URL (optional, default: local SQLite)
         """
         self.SessionMaker = get_session_maker(db_url)
         logger.info("Database Manager initialized")
+
+    def get_session(self) -> Session:
+        """
+        Get a new database session.
+
+        Returns:
+            SQLAlchemy Session
+        """
+        return self.SessionMaker()
     
     def add_symptom(self, symptom: SymptomEntry) -> SymptomResponse:
         """
