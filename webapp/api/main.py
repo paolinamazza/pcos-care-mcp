@@ -162,6 +162,15 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    """Fast health check for Render.com"""
+    return {
+        "status": "healthy",
+        "app": "PCOS Care API",
+        "version": "2.0.0"
+    }
+
+@app.get("/health/detailed")
+async def detailed_health_check():
     """Detailed health check"""
     # Check database
     db_healthy = True
