@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from database import DatabaseManager
 from database.auth import User
 from tools import SymptomTracker, CycleTracker, PatternAnalyzer
-from rag import PCOSKnowledgeBase
+# Import RAG conditionally to avoid loading heavy dependencies when disabled
 
 # Import auth utilities
 from auth import (
@@ -70,6 +70,7 @@ ENABLE_RAG = os.getenv("ENABLE_RAG", "false").lower() == "true"
 
 if ENABLE_RAG:
     try:
+        from rag import PCOSKnowledgeBase
         knowledge_base = PCOSKnowledgeBase(use_pdf_rag=True)
         RAG_AVAILABLE = True
     except Exception as e:
